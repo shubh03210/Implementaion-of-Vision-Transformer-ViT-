@@ -1,0 +1,17 @@
+# Ignore virtual environment
+myenv/
+
+# Ignore Python bytecode and cache
+__pycache__/
+*.pyc
+
+# Ignore training script (if needed)
+train_model.py
+
+# Ignore model files and logs
+*.pth
+*.log
+*.tmp
+
+# Ignore dataset files
+data/MNIST/raw/
