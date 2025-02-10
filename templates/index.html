@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DeepSight - AI Vision</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <style>
+        body {
+            background: linear-gradient(135deg, #6e8efb, #a777e3);
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            text-align: center;
+        }
+        .container {
+            margin-top: 60px;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease-in-out;
+        }
+        .card:hover {
+            transform: scale(1.05);
+        }
+        .btn-primary {
+            background-color: #6e8efb;
+            border: none;
+            font-size: 18px;
+            transition: 0.3s;
+        }
+        .btn-primary:hover {
+            background-color: #5a75f1;
+        }
+        .drag-drop {
+            border: 2px dashed #6e8efb;
+            padding: 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .drag-drop:hover {
+            background-color: rgba(110, 142, 251, 0.1);
+        }
+        .hidden-input {
+            display: none;
+        }
+        .progress-container {
+            display: none;
+            margin-top: 10px;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 8px;
+            background-color: #6e8efb;
+            border-radius: 5px;
+            transition: width 1s;
+        }
+        #result-container {
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            color: #333;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="display-4 fw-bold">DeepSight</h1>
+        <p class="lead">Upload an image</p>
+        
+        <div class="card mx-auto" style="max-width: 500px;">
+            <form id="upload-form" enctype="multipart/form-data">
+                
+                <!-- Drag & Drop -->
+                <div class="drag-drop" id="drop-area">
+                    <p class="text-dark fw-bold">Drag & Drop an Image Here</p>
+                    <p class="text-muted">or</p>
+                    
+                    <input type="file" name="file" id="file" class="hidden-input" accept="image/*">
+                    <button type="button" class="btn btn-secondary mt-2 w-100" id="select-file-btn">📂 Select File</button>
+                </div>
+
+                <div class="progress-container">
+                    <div class="progress-bar" id="progress-bar"></div>
+                </div>
+                
+                <button type="submit" class="btn btn-primary w-100 mt-3">Upload & Detect</button>
+            </form>
+
+            <!-- Prediction Result -->
+            <div id="result-container" class="mt-4">
+                <h5>🔍 Predicted Result:</h5>
+                <p id="prediction-text" class="lead"></p>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        $(document).ready(function() {
+            let dropArea = $("#drop-area");
+            let fileInput = $("#file");
+            let selectFileBtn = $("#select-file-btn");
+            let form = $("#upload-form");
+            let progressBar = $("#progress-bar");
+            let resultContainer = $("#result-container");
+            let predictionText = $("#prediction-text");
+
+            // File selection
+            selectFileBtn.on("click", function() {
+                fileInput.click();
+            });
+
+            // Drag & Drop Functionality
+            dropArea.on("dragover", function(event) {
+                event.preventDefault();
+                $(this).css("background-color", "rgba(110, 142, 251, 0.2)");
+            });
+
+            dropArea.on("dragleave", function() {
+                $(this).css("background-color", "transparent");
+            });
+
+            dropArea.on("drop", function(event) {
+                event.preventDefault();
+                $(this).css("background-color", "transparent");
+                let files = event.originalEvent.dataTransfer.files;
+                fileInput[0].files = files;
+            });
+
+            // AJAX Form Submission
+            form.on("submit", function(event) {
+                event.preventDefault();
+                let formData = new FormData(this);
+
+                // Show Progress
+                $(".progress-container").fadeIn();
+                progressBar.css("width", "50%");
+
+                $.ajax({
+                    url: "/predict",
+                    type: "POST",
+                    data: formData,
+                    contentType: false,
+                    processData: false,
+                    success: function(response) {
+                        progressBar.css("width", "100%");
+                        setTimeout(() => {
+                            $(".progress-container").fadeOut();
+                            resultContainer.fadeIn();
+                            predictionText.text(response.label);
+                        }, 500);
+                    },
+                    error: function() {
+                        progressBar.css("width", "100%");
+                        setTimeout(() => {
+                            $(".progress-container").fadeOut();
+                            resultContainer.fadeIn();
+                            predictionText.text("❌ Error: Unable to predict.");
+                        }, 500);
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

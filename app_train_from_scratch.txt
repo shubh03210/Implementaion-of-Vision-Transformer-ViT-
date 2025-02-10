@@ -1,0 +1,158 @@
+import torch
+import torch.nn as nn
+import os
+from flask import Flask, request, jsonify, render_template
+from PIL import Image
+import torchvision.transforms as transforms
+from torchviz import make_dot
+
+# Initialize Flask app
+app = Flask(__name__)
+
+# ✅ Define PatchEmbed Class
+class PatchEmbed(nn.Module):
+    def __init__(self, img_size=224, patch_size=16, in_c=1, embed_dim=512):
+        super().__init__()
+        self.proj = nn.Conv2d(in_c, embed_dim, kernel_size=patch_size, stride=patch_size)
+
+    def forward(self, x):
+        x = self.proj(x)
+        x = x.flatten(2).transpose(1, 2)
+        return x
+
+# ✅ Define Attention Block
+class Attention(nn.Module):
+    def __init__(self, dim, n_heads=8):
+        super().__init__()
+        self.n_heads = n_heads
+        self.qkv = nn.Linear(dim, dim * 3)
+        self.proj = nn.Linear(dim, dim)
+
+    def forward(self, x):
+        qkv = self.qkv(x).chunk(3, dim=-1)
+        q, k, v = qkv
+        attn = (q @ k.transpose(-2, -1)) / (k.size(-1) ** 0.5)
+        attn = attn.softmax(dim=-1)
+        x = attn @ v
+        x = self.proj(x)
+        return x
+
+# ✅ Define Transformer Block
+class Block(nn.Module):
+    def __init__(self, dim, n_heads=8, mlp_ratio=4.):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(dim)
+        self.attn = Attention(dim, n_heads)
+        self.norm2 = nn.LayerNorm(dim)
+        self.mlp = nn.Sequential(
+            nn.Linear(dim, int(dim * mlp_ratio)),
+            nn.GELU(),
+            nn.Linear(int(dim * mlp_ratio), dim)
+        )
+
+    def forward(self, x):
+        x = x + self.attn(self.norm1(x))
+        x = x + self.mlp(self.norm2(x))
+        return x
+
+# ✅ Define Vision Transformer Model
+class VisionTransformer(nn.Module):
+    def __init__(self, img_size=224, patch_size=16, in_c=1, n_classes=10, embed_dim=512, depth=6, n_heads=8, mlp_ratio=4.):  
+        super().__init__()
+        self.patch_embed = PatchEmbed(img_size=img_size, patch_size=patch_size, in_c=in_c, embed_dim=embed_dim)
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        
+        num_patches = (img_size // patch_size) ** 2
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
+        
+        self.pos_drop = nn.Dropout(p=0.1)
+        self.blocks = nn.ModuleList([
+            Block(dim=embed_dim, n_heads=n_heads, mlp_ratio=mlp_ratio)
+            for _ in range(depth)
+        ])
+        self.norm = nn.LayerNorm(embed_dim, eps=1e-6)
+        self.head = nn.Linear(embed_dim, n_classes)
+
+    def forward(self, x):
+        n_samples = x.shape[0]
+        x = self.patch_embed(x)
+        cls_token = self.cls_token.expand(n_samples, -1, -1)
+        x = torch.cat((cls_token, x), dim=1)
+        x = x + self.pos_embed
+        x = self.pos_drop(x)
+        for block in self.blocks:
+            x = block(x)
+        x = self.norm(x)
+        cls_token_final = x[:, 0]
+        x = self.head(cls_token_final)
+        return x
+
+# ✅ Define paths
+model_path = "models/trained_model.pth"
+checkpoint_path = "models/checkpoint.pth"
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+# ✅ Load model with correct architecture
+model = VisionTransformer(img_size=224, patch_size=16, in_c=1, n_classes=10, embed_dim=512, depth=6, n_heads=8).to(device)
+
+# ✅ Load model checkpoint correctly
+if os.path.exists(checkpoint_path):
+    model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
+    model.eval()
+    print("✅ Model loaded successfully!")
+else:
+    print("❌ Model checkpoint not found!")
+
+# ✅ Image preprocessing
+transform = transforms.Compose([
+    transforms.Resize((224, 224)),
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,))
+])
+
+# ✅ Verify model parameter size
+total_params = sum(p.numel() for p in model.parameters())
+print(f"✅ Model parameter size: {total_params}")
+
+# ✅ Home Page (Upload Image)
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+# ✅ Prediction API
+@app.route('/predict', methods=['POST'])
+def predict():
+    if not model:
+        return jsonify({"error": "Model is not loaded. Please train and save the model."}), 500
+
+    if 'file' not in request.files:
+        return jsonify({"error": "No file uploaded"}), 400
+
+    file = request.files['file']
+
+    try:
+        # Process the image
+        image = Image.open(file).convert('L')
+        image = transform(image).unsqueeze(0).to(device)
+        
+        # Run inference
+        with torch.no_grad():
+            output = model(image)
+            predicted_class = torch.argmax(output, dim=1).item()
+
+        # # Visualize the model after prediction (Skipped for now)
+        # make_dot(output, params=dict(model.named_parameters())).render("static/model_architecture", format="png")
+        # print("✅ Model architecture saved as 'static/model_architecture.png'!")
+
+        class_names = ["Class 0", "Class 1", "Class 2", "Class 3", "Class 4",
+                       "Class 5", "Class 6", "Class 7", "Class 8", "Class 9"]
+        predicted_label = class_names[predicted_class]
+
+        return jsonify({"predicted_class": predicted_class, "label": predicted_label})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ✅ Run the Flask app
+if __name__ == '__main__':
+    app.run(debug=True)
