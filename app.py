@@ -5,10 +5,9 @@ from flask import Flask, request, jsonify, render_template
 from PIL import Image
 import torchvision.transforms as transforms
 
-# ✅ Initialize Flask App
 app = Flask(__name__)
 
-# ✅ Define PatchEmbed Class
+#Define PatchEmbed Class
 class PatchEmbed(nn.Module):
     def __init__(self, img_size=224, patch_size=16, in_c=3, embed_dim=768):
         super().__init__()
@@ -19,7 +18,7 @@ class PatchEmbed(nn.Module):
         x = x.flatten(2).transpose(1, 2)
         return x
 
-# ✅ Define Attention Block
+#  Attention Block
 class Attention(nn.Module):
     def __init__(self, dim, n_heads=12, qkv_bias=True, attn_drop=0., proj_drop=0.):
         super().__init__()
@@ -27,7 +26,7 @@ class Attention(nn.Module):
         self.head_dim = dim // n_heads
         self.scale = self.head_dim ** -0.5
 
-        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)  # ✅ Allow qkv_bias
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias) 
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
@@ -53,21 +52,21 @@ class Attention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, in_features, hidden_features, out_features, drop=0.):
         super().__init__()
-        self.fc1 = nn.Linear(in_features, hidden_features)  # ✅ Matches DeiT
+        self.fc1 = nn.Linear(in_features, hidden_features)  #  Matches DeiT
         self.act = nn.GELU()
-        self.fc2 = nn.Linear(hidden_features, out_features)  # ✅ Matches DeiT
+        self.fc2 = nn.Linear(hidden_features, out_features) 
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
-        x = self.fc1(x)  # ✅ Use fc1 instead of unnamed layers
+        x = self.fc1(x) 
         x = self.act(x)
         x = self.drop(x)
-        x = self.fc2(x)  # ✅ Use fc2 instead of unnamed layers
+        x = self.fc2(x) 
         x = self.drop(x)
         return x
 
 
-# ✅ Define Transformer Block
+# Added Transformer Block✅
 class Block(nn.Module):
     def __init__(self, dim, n_heads, mlp_ratio=4., qkv_bias=True, drop=0., attn_drop=0.):
         super().__init__()
@@ -76,17 +75,14 @@ class Block(nn.Module):
         
         self.norm2 = nn.LayerNorm(dim, eps=1e-6)
         hidden_features = int(dim * mlp_ratio)
-        self.mlp = MLP(in_features=dim, hidden_features=hidden_features, out_features=dim, drop=drop)  # ✅ Use updated MLP
+        self.mlp = MLP(in_features=dim, hidden_features=hidden_features, out_features=dim, drop=drop)  #  updated MLP
 
     def forward(self, x):
-        x = x + self.attn(self.norm1(x))  # ✅ Matches DeiT
-        x = x + self.mlp(self.norm2(x))  # ✅ Matches DeiT
+        x = x + self.attn(self.norm1(x))  
+        x = x + self.mlp(self.norm2(x))  
         return x
 
-
-
-
-# ✅ Define Custom Vision Transformer Model
+#Costom Vision Transformer Model
 class VisionTransformer(nn.Module):
     def __init__(self, img_size=224, patch_size=16, in_c=3, n_classes=1000, embed_dim=768, depth=12, n_heads=12, mlp_ratio=4.):  
         super().__init__()
@@ -118,38 +114,34 @@ class VisionTransformer(nn.Module):
         x = self.head(cls_token_final)
         return x
 
-# ✅ Load Pretrained Weights into Custom Model
+# Loading Pretrained Weights into Custom Vision Transformer Model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = VisionTransformer(img_size=224, patch_size=16, in_c=3, n_classes=1000, embed_dim=768, depth=12, n_heads=12).to(device)
 
-# ✅ Load Pretrained Weights from DeiT Base
 pretrained_model = torch.hub.load('facebookresearch/deit:main', 'deit_base_patch16_224', pretrained=True)
 pretrained_weights = pretrained_model.state_dict()
 
-# ✅ Check for Missing Keys
+
 missing_keys, unexpected_keys = model.load_state_dict(pretrained_weights, strict=False)
 print(f"✅ Weights Loaded Successfully! ✅\nMissing keys: {missing_keys}\nUnexpected keys: {unexpected_keys}")
-
-# ✅ Set Model to Evaluation Mode
 model.eval()
-
-# ✅ Image Preprocessing (Same as DeiT Training)
+#  Image Preprocessing (Same as DeiT Training)
 transform = transforms.Compose([
     transforms.Resize((224, 224)),  # Resize to 224x224
     transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # Match ImageNet stats
 ])
-
-# ✅ Load ImageNet Labels
 with open("imagenet_labels.txt", "r") as f:
-    class_names = [line.strip() for line in f.readlines()]  # Read all labels
+    class_names = [line.strip() for line in f.readlines()]  # Read all label
 
-# ✅ Home Page (Upload Image)
+
+
+
 @app.route('/')
 def home():
     return render_template('index.html')
 
-# ✅ Prediction API
+#Prediction API
 @app.route('/predict', methods=['POST'])
 def predict():
     if not model:
@@ -171,7 +163,7 @@ def predict():
             probabilities = torch.nn.functional.softmax(output[0], dim=0)
             predicted_class = torch.argmax(probabilities).item()  # Get class index
 
-        # ✅ Use ImageNet labels for human-readable prediction
+      
         predicted_label = class_names[predicted_class] if predicted_class < len(class_names) else "Unknown"
 
         return jsonify({"predicted_class": predicted_class, "label": predicted_label})
@@ -179,6 +171,6 @@ def predict():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# ✅ Run Flask App
+
 if __name__ == '__main__':
     app.run(debug=True)
