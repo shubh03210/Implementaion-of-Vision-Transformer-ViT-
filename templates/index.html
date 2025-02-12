@@ -69,6 +69,11 @@
             color: #333;
             font-weight: bold;
         }
+        #file-name {
+            margin-top: 10px;
+            color: #333;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -86,6 +91,7 @@
                     
                     <input type="file" name="file" id="file" class="hidden-input" accept="image/*">
                     <button type="button" class="btn btn-secondary mt-2 w-100" id="select-file-btn">📂 Select File</button>
+                    <p id="file-name"></p>
                 </div>
 
                 <div class="progress-container">
@@ -112,10 +118,16 @@
             let progressBar = $("#progress-bar");
             let resultContainer = $("#result-container");
             let predictionText = $("#prediction-text");
+            let fileNameDisplay = $("#file-name");
 
             // File selection
             selectFileBtn.on("click", function() {
                 fileInput.click();
+            });
+
+            fileInput.on("change", function() {
+                let fileName = this.files[0] ? this.files[0].name : "No file selected";
+                fileNameDisplay.text(fileName);
             });
 
             // Drag & Drop Functionality
@@ -133,6 +145,8 @@
                 $(this).css("background-color", "transparent");
                 let files = event.originalEvent.dataTransfer.files;
                 fileInput[0].files = files;
+                let fileName = files[0] ? files[0].name : "No file selected";
+                fileNameDisplay.text(fileName);
             });
 
             // AJAX Form Submission
